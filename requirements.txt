@@ -4,6 +4,8 @@ pandas
 numpy
 scikit-learn
 sentence-transformers
-torch
 python-docx
+requests
+beautifulsoup4
+lxml
 
