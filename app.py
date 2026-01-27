@@ -10,7 +10,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 # Load AI model
-model = SentenceTransformer("all-MiniLM-L6-v2")
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+model = load_model()
+
 
 
 # Extract text from resume file
