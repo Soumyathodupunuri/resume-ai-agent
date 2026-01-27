@@ -277,4 +277,4 @@ if resume_file and job_url:
 
 # Footer
 st.markdown("---")
-st.markdown("Built by Soumya | Resume AI Agent")
+st.markdown("Built by Soumya | Resume AI Agent")")
