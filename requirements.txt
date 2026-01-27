@@ -5,4 +5,5 @@ numpy
 scikit-learn
 sentence-transformers
 torch
+python-docx
 
