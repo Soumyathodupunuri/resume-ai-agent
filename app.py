@@ -1,6 +1,6 @@
 import streamlit as st
 import pdfplumber
-import docx
+from docx import Document
 import io
 
 from sentence_transformers import SentenceTransformer
