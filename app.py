@@ -111,54 +111,66 @@ def calculate_ats(resume, job):
 # ---------------------------------
 # Improve Resume
 # ---------------------------------
+def generate_creative_resume(name, role, skills):
 
-def improve_resume(resume, job):
-
-    job_words = set(job.lower().split())
-    resume_words = set(resume.lower().split())
-
-    missing = list(job_words - resume_words)
-    keywords = missing[:12]
-
-    improved = []
-
-    improved.append("SUMMARY\n")
-    improved.append(
-        "Motivated Computer Science student with expertise in "
-        + ", ".join(keywords[:5]) +
-        ". Strong problem-solving and software development skills."
+    profile = (
+        f"Dynamic and result-oriented {role} with strong expertise in "
+        f"{', '.join(skills[:4])}. Skilled in building scalable systems, "
+        f"optimizing performance, and delivering high-impact solutions."
     )
 
-    improved.append("\n\nTECHNICAL SKILLS\n")
-    improved.append(
-        "Programming & Tools: " +
-        ", ".join(sorted(set(keywords + extract_skills(resume))))
-    )
+    resume = f"""
 
-    improved.append("\n\nPROJECTS\n")
+{name.upper()}
+{role}
+India | 📞 Phone | ✉ Email | 🔗 LinkedIn
 
-    improved.append(
-        "• Developed AI-powered resume analyzer using Python and NLP, "
-        "improving ATS compatibility by 35%."
-    )
 
-    improved.append(
-        "• Built full-stack job portal using Flask and SQL with secure authentication."
-    )
+PROFILE OVERVIEW
+{profile}
 
-    improved.append("\n\nEXPERIENCE\n")
 
-    improved.append(
-        "• Automated data pipelines using Python, reducing processing time by 40%."
-    )
+TECHNICAL EXPERTISE
+{' | '.join(skills)}
 
-    improved.append("\n\nACHIEVEMENTS\n")
 
-    improved.append(
-        "• Ranked among top performers in coding competitions and hackathons."
-    )
+PROFESSIONAL CONTRIBUTIONS
+AI Resume Optimization Platform
+• Designed NLP-powered ATS scoring system using transformers
+• Improved resume matching accuracy by 45%
+• Built cloud-ready Streamlit application
 
-    return "\n".join(improved)
+Job Portal Management System
+• Engineered secure backend using Flask and JWT authentication
+• Reduced API response time by 35%
+• Integrated role-based user management
+
+
+KEY PROJECTS & INNOVATIONS
+Smart Career Recommendation Engine
+• Developed ML-based ranking algorithms
+• Integrated real-time job scraping APIs
+• Increased placement success rate by 28%
+
+
+TOOLS, FRAMEWORKS & PLATFORMS
+{' | '.join(skills[:7])}
+
+
+ACADEMIC CREDENTIALS
+B.Tech in Computer Science – XYZ University (2023–2027)
+
+
+DISTINCTIONS & CERTIFICATIONS
+• Google Cloud Foundations
+• AWS Cloud Practitioner (Ongoing)
+• LeetCode Top 15%
+
+"""
+
+    return resume
+
+
 
 
 # ---------------------------------
