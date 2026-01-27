@@ -45,15 +45,12 @@ def fetch_job_description(url):
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "lxml")
 
-        # Remove scripts, styles
+        # Remove scripts, styles, headers, footers
         for tag in soup(["script", "style", "header", "footer", "nav"]):
             tag.decompose()
 
         text = soup.get_text(separator=" ")
-
-        # Clean excessive whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-
         return text
 
     except Exception as e:
@@ -64,12 +61,19 @@ def fetch_job_description(url):
 # Extract most important sentences
 # ----------------------------
 def extract_important_info(text, top_n=20):
-    sentences = re.split(r'\.|\n', text)  # split by period or newline
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 5]  # remove empty/short
-    # prioritize sentences with keywords
+    sentences = re.split(r'\.|\n', text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
+
+    # Prioritize sentences with keywords
     important_keywords = ["skills", "experience", "qualification", "requirement", "responsibility", "job"]
     important = [s for s in sentences if any(k in s.lower() for k in important_keywords)]
-    return " ".join(important[:top_n])  # top N important sentences
+    
+    # If not enough important sentences, fallback to top sentences
+    if len(important) < top_n:
+        remaining = [s for s in sentences if s not in important]
+        important += remaining[:top_n - len(important)]
+
+    return " ".join(important[:top_n])
 
 # ----------------------------
 # Skill matching
@@ -100,17 +104,33 @@ st.title("Smart Resume AI Agent")
 uploaded_file = st.file_uploader("Upload Resume", type=["pdf","docx","txt"])
 job_url = st.text_input("Paste Job Link Here:")
 
-if uploaded_file and job_url:
-    resume_text = extract_text(uploaded_file.read(), uploaded_file.name)
-    job_text_raw = fetch_job_description(job_url)
-    job_text = extract_important_info(job_text_raw)
+# Analyze button triggers the processing
+if st.button("Analyze"):
+    if not uploaded_file:
+        st.warning("Please upload a resume file first!")
+    elif not job_url:
+        st.warning("Please paste a job link first!")
+    else:
+        # Extract resume text
+        resume_text = extract_text(uploaded_file.read(), uploaded_file.name)
+        
+        # Fetch and extract important job info
+        job_text_raw = fetch_job_description(job_url)
+        job_text = extract_important_info(job_text_raw)
 
-    st.subheader("Important Job Info Extracted:")
-    st.write(job_text if job_text else "Could not extract meaningful info.")
+        # Show extracted job info
+        st.subheader("Important Job Info Extracted:")
+        st.write(job_text if job_text else "Could not extract meaningful info.")
 
-    st.subheader("Matched Skills")
-    st.write(match_skills(resume_text))
+        # Show matched skills
+        st.subheader("Matched Skills")
+        matched_skills = match_skills(resume_text)
+        if matched_skills:
+            st.write(matched_skills)
+        else:
+            st.write("No skills from the predefined list found in resume.")
 
-    st.subheader("Resume vs Job Similarity")
-    score = similarity_score(resume_text, job_text)
-    st.write(f"{score:.2f} (0=low match, 1=perfect match)")
+        # Show similarity score
+        st.subheader("Resume vs Job Similarity")
+        score = similarity_score(resume_text, job_text)
+        st.write(f"{score:.2f} (0 = low match, 1 = perfect match)")
