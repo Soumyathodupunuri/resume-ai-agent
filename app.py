@@ -1,3 +1,4 @@
+import streamlit as st
 import pdfplumber
 import io
 from docx import Document
