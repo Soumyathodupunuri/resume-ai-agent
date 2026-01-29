@@ -1,324 +1,217 @@
-import streamlit as st
 import pdfplumber
 import io
-import requests
-
-from bs4 import BeautifulSoup
 from docx import Document
-
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-
-from transformers import pipeline
-
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT
+import tempfile
 
+# -------------------------------
+# Page Setup
+# -------------------------------
+st.set_page_config(page_title="Smart ATS Resume Builder", layout="centered")
+st.title("📄 Smart ATS-Friendly Resume Builder")
+st.write("Upload your old resume, paste the job description, and generate an optimized resume with matched skills highlighted.")
 
-# ---------------- LOAD MODELS ----------------
-
-@st.cache_resource
-def load_models():
-
-    embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-    text_ai = pipeline(
-        "text-generation",
-        model="distilgpt2"
-    )
-
-    return embed_model, text_ai
-
-
-model, ai_generator = load_models()
-
-
-# ---------------- FUNCTIONS ----------------
-
-
-# Extract resume text
+# -------------------------------
+# Read Resume
+# -------------------------------
 def extract_text(file, name):
-
     if name.endswith(".pdf"):
-
         text = ""
-
         with pdfplumber.open(io.BytesIO(file)) as pdf:
-
             for page in pdf.pages:
-
                 if page.extract_text():
-                    text += page.extract_text()
-
+                    text += page.extract_text() + "\n"
         return text
-
-
     elif name.endswith(".docx"):
-
         doc = Document(io.BytesIO(file))
-
-        return "\n".join([p.text for p in doc.paragraphs])
-
-
+        return "\n".join(p.text for p in doc.paragraphs)
     else:
+        return file.decode("utf-8", errors="ignore")
 
-        return file.decode("utf-8")
-
-
-# Get job description from URL
-def get_jd_from_link(url):
-
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    res = requests.get(url, headers=headers)
-
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    text = soup.get_text(separator=" ")
-
-    return text[:6000]
-
-
-# Get embedding
-def get_embedding(text):
-
-    return model.encode(text)
-
-
-# Skill database
-SKILLS = [
-    "python","java","sql","aws","docker","react",
-    "node","flask","django","fastapi","ml","ai",
-    "data analysis","linux","git","cloud",
-    "kubernetes","pandas","numpy","spark",
-    "tensorflow","pytorch"
+# -------------------------------
+# Skills Extraction
+# -------------------------------
+TECH_KEYWORDS = [
+    "python","java","c","c++","sql","aws","ml","ai","flask","django",
+    "react","node","git","docker","kubernetes","linux","tensorflow",
+    "pandas","numpy","matlab","verilog","vhdl","arduino","raspberry pi",
+    "stm32","iot","fpga","asic","eda tools","microcontrollers"
 ]
 
-
-# Extract skills
 def extract_skills(text):
-
     text = text.lower()
-
-    found = []
-
-    for skill in SKILLS:
-
+    skills_found = []
+    for skill in TECH_KEYWORDS:
         if skill in text:
-            found.append(skill)
+            skills_found.append(skill)
+    return list(set(skills_found))
 
-    return found
+# -------------------------------
+# Build Resume
+# -------------------------------
+def build_resume(old_text, jd_text, name, contact):
+    old_skills = extract_skills(old_text)
+    jd_skills = extract_skills(jd_text)
 
+    matched_skills = sorted(list(set(old_skills) & set(jd_skills)))
+    unmatched_skills = sorted(list(set(jd_skills) - set(old_skills)))
 
-# ATS score
-def calculate_ats(resume, jd):
+    # Sections
+    sections = {
+        "SUMMARY": [],
+        "SKILLS": [],
+        "PROJECTS": [],
+        "EXPERIENCE": [],
+        "EDUCATION": []
+    }
 
-    resume_words = set(resume.lower().split())
+    lines = [l.strip() for l in old_text.split("\n") if l.strip()]
+    for line in lines:
+        l = line.lower()
+        if "project" in l:
+            sections["PROJECTS"].append(line)
+        elif "intern" in l or "experience" in l:
+            sections["EXPERIENCE"].append(line)
+        elif "b.tech" in l or "degree" in l or "university" in l:
+            sections["EDUCATION"].append(line)
+        elif any(word in l for word in TECH_KEYWORDS):
+            sections["SKILLS"].append(line)
+        else:
+            sections["SUMMARY"].append(line)
 
-    jd_words = set(jd.lower().split())
+    # ---------------- Build Resume Text ----------------
+    resume = f"{name}\n{contact}\n\n"
 
-    matched = resume_words & jd_words
+    # Summary
+    resume += "SUMMARY\n" + "-"*40 + "\n"
+    summary_text = "Motivated engineering student with strong problem-solving skills and experience in building applications."
+    if matched_skills:
+        summary_text += " Skilled in " + ", ".join(matched_skills) + "."
+    resume += summary_text + "\n\n"
 
-    if len(jd_words) == 0:
-        return 0
+    # Skills
+    resume += "SKILLS\n" + "-"*40 + "\n"
+    if matched_skills:
+        resume += "✅ Matched Skills: " + ", ".join(matched_skills) + "\n"
+    if unmatched_skills:
+        resume += "⚠️ Skills to Learn: " + ", ".join(unmatched_skills) + "\n"
+    resume += "\n"
 
-    score = (len(matched) / len(jd_words)) * 100
+    # Projects
+    resume += "PROJECTS\n" + "-"*40 + "\n"
+    for p in sections["PROJECTS"][:5]:
+        resume += f"- {p}\n"
+    resume += "\n"
 
-    return round(score, 2)
+    # Experience
+    resume += "EXPERIENCE\n" + "-"*40 + "\n"
+    for e in sections["EXPERIENCE"][:4]:
+        resume += f"- {e}\n"
+    resume += "\n"
 
+    # Education
+    resume += "EDUCATION\n" + "-"*40 + "\n"
+    for ed in sections["EDUCATION"][:3]:
+        resume += f"- {ed}\n"
 
-# AI Resume optimizer
-def optimize_resume(resume, jd):
+    return resume, matched_skills, unmatched_skills
 
-    prompt = f"""
-Rewrite this resume to strongly match the job description.
+# -------------------------------
+# PDF Generator
+# -------------------------------
+def generate_pdf(text):
+    file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    path = file.name
 
-Make it:
-- ATS friendly
-- Keyword optimized
-- Professional
-- Well structured
-
-Resume:
-{resume}
-
-Job Description:
-{jd}
-"""
-
-    result = ai_generator(
-        prompt,
-        max_new_tokens=250,
-        do_sample=False
+    doc = SimpleDocTemplate(
+        path, pagesize=A4,
+        rightMargin=50, leftMargin=50,
+        topMargin=40, bottomMargin=40
     )
 
-    return result[0]["generated_text"]
-
-
-# Create PDF
-def generate_pdf(text):
-
-    buffer = io.BytesIO()
-
-    c = canvas.Canvas(buffer, pagesize=A4)
-
-    width, height = A4
-
-    x = 40
-    y = height - 50
-
+    styles = getSampleStyleSheet()
+    heading = ParagraphStyle(
+        "heading", parent=styles["Normal"],
+        fontSize=13, spaceAfter=8, spaceBefore=12,
+        alignment=TA_LEFT, bold=True
+    )
+    normal = styles["Normal"]
+    story = []
 
     for line in text.split("\n"):
-
-        if y < 50:
-
-            c.showPage()
-            y = height - 50
-
-
-        c.drawString(x, y, line)
-
-        y -= 15
-
-
-    c.save()
-
-    buffer.seek(0)
-
-    return buffer
-
-
-# ---------------- UI ----------------
-
-st.set_page_config(
-    page_title="AI Resume Agent",
-    layout="centered"
-)
-
-
-st.title("🤖 AI Resume Matching & ATS Optimizer")
-
-st.write("Upload Resume + Paste Job Link")
-
-
-# Upload Resume
-resume_file = st.file_uploader(
-    "📄 Upload Resume",
-    type=["pdf","docx","txt"]
-)
-
-
-# Job Link
-job_url = st.text_input(
-    "🔗 Paste Job Link"
-)
-
-
-# Analyze Button
-if st.button("🚀 Analyze Resume"):
-
-
-    if resume_file is None or job_url.strip() == "":
-
-        st.error("Please upload resume and paste job link")
-
-    else:
-
-
-        with st.spinner("AI Processing... Please wait"):
-
-
-            # Resume text
-            resume_bytes = resume_file.read()
-
-            resume_text = extract_text(
-                resume_bytes,
-                resume_file.name
-            )
-
-
-            # Job description
-            jd_text = get_jd_from_link(job_url)
-
-
-            # Embeddings
-            resume_vec = get_embedding(resume_text)
-
-            jd_vec = get_embedding(jd_text)
-
-
-            # Match Score
-            match_score = cosine_similarity(
-                [resume_vec],
-                [jd_vec]
-            )[0][0] * 100
-
-
-            # ATS Score
-            ats_score = calculate_ats(
-                resume_text,
-                jd_text
-            )
-
-
-            # Skills
-            resume_skills = extract_skills(resume_text)
-
-            jd_skills = extract_skills(jd_text)
-
-            matched = set(resume_skills) & set(jd_skills)
-
-            missing = set(jd_skills) - set(resume_skills)
-
-
-            # AI Resume
-            improved_resume = optimize_resume(
-                resume_text,
-                jd_text
-            )
-
-
-        # ---------------- RESULTS ----------------
-
-
-        st.success("✅ Analysis Completed")
-
-
-        st.subheader("📊 Resume Scores")
-
-        st.metric("Match Score", f"{round(match_score,2)} %")
-
-        st.metric("ATS Score", f"{ats_score} %")
-
-
-        st.subheader("✅ Matched Skills")
-
-        st.write(list(matched))
-
-
-        st.subheader("❌ Missing Skills")
-
-        st.write(list(missing))
-
-
-        st.subheader("📝 AI Optimized Resume")
-
-        st.text_area(
-            "Improved Resume",
-            improved_resume,
-            height=350
-        )
-
-
-        # Download PDF
-        pdf_file = generate_pdf(improved_resume)
-
-
+        if not line.strip():
+            story.append(Spacer(1,10))
+            continue
+        if line.isupper() and len(line) < 25:
+            p = Paragraph(f"<b>{line}</b>", heading)
+        else:
+            p = Paragraph(line, normal)
+        story.append(p)
+        story.append(Spacer(1,6))
+
+    doc.build(story)
+    return path
+
+# -------------------------------
+# Streamlit UI
+# -------------------------------
+# Use session state to store input reliably
+if "name" not in st.session_state:
+    st.session_state.name = ""
+if "contact" not in st.session_state:
+    st.session_state.contact = ""
+
+st.subheader("👤 Your Details")
+st.text_input("Full Name", key="name")
+st.text_input("Email | Phone | LinkedIn | GitHub", key="contact")
+
+st.subheader("📎 Upload Resume")
+resume_file = st.file_uploader("Upload Old Resume (PDF / DOCX / TXT)", ["pdf", "docx", "txt"])
+
+st.subheader("💼 Job Information")
+job_link = st.text_input("Job Link (Optional)")
+job_desc = st.text_area("Paste Job Description Here", height=200)
+
+# Generate Resume
+if st.button("Generate ATS Resume with Skills"):
+    name = st.session_state.name.strip()
+    contact = st.session_state.contact.strip()
+
+    if not resume_file:
+        st.error("❌ Please upload your resume")
+        st.stop()
+    if not name or not contact:
+        st.error("❌ Enter your name and contact details")
+        st.stop()
+    if not job_desc.strip():
+        st.error("❌ Paste job description")
+        st.stop()
+
+    with st.spinner("Building optimized resume..."):
+        old_text = extract_text(resume_file.read(), resume_file.name)
+        new_resume, matched, unmatched = build_resume(old_text, job_desc, name, contact)
+        pdf_path = generate_pdf(new_resume)
+
+    st.success("✅ Resume Generated Successfully")
+
+    # Display matched/unmatched skills
+    st.subheader("📊 Skill Analysis")
+    if matched:
+        st.write("✅ Matched Skills: " + ", ".join(matched))
+    if unmatched:
+        st.write("⚠️ Skills to Learn: " + ", ".join(unmatched))
+
+    if job_link.strip():
+        st.info(f"🔗 Job Link: {job_link}")
+
+    # Download PDF
+    with open(pdf_path, "rb") as f:
         st.download_button(
-            label="⬇️ Download Resume PDF",
-            data=pdf_file,
-            file_name="AI_Optimized_Resume.pdf",
+            "⬇️ Download ATS Resume (PDF)",
+            f,
+            file_name="ATS_Optimized_Resume.pdf",
             mime="application/pdf"
         )
