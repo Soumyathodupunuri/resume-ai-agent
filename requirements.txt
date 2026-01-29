@@ -1,9 +1,11 @@
 streamlit
 pdfplumber
+python-docx
 sentence-transformers
 scikit-learn
 beautifulsoup4
 requests
-python-docx
+transformers
+torch
 reportlab
 
